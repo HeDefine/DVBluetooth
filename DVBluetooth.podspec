@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
 
   s.platform     = :ios
   #s.platform     = :ios, "9.0"
-
+  s.ios.deployment_target  = '9.0'
   s.source       = { :git => "https://github.com/HeDefine/DVBluetooth.git", :tag => "0.2.0" }
   s.source_files  = "DVBluetooth/**/*.{h,m}"
   s.exclude_files = "DVBluetoothExample"
