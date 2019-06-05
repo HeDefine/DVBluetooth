@@ -13,8 +13,8 @@ Pod::Spec.new do |s|
 
   s.author             = { "Devine He" => "hedingfei1993@126.com" }
 
-  #s.platform     = :ios
-  s.platform     = :ios, "9.0"
+  s.platform     = :ios
+  #s.platform     = :ios, "9.0"
 
   s.source       = { :git => "https://github.com/HeDefine/DVBluetooth.git", :tag => "0.2.0" }
   s.source_files  = "DVBluetooth/**/*.{h,m}"
