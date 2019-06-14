@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "DVBluetooth"
-  s.version      = "0.2.0"
+  s.version      = "0.3.0"
   s.summary      = "Bluetooth manager for iOS."
 
   s.description  = "The DVBluetooth help us easier connect and control bluetooth peripheral. 
@@ -16,7 +16,7 @@ Pod::Spec.new do |s|
   s.platform     = :ios
   #s.platform     = :ios, "9.0"
   s.ios.deployment_target  = '9.0'
-  s.source       = { :git => "https://github.com/HeDefine/DVBluetooth.git", :tag => "0.2.0" }
+  s.source       = { :git => "https://github.com/HeDefine/DVBluetooth.git", :tag => "0.3.0" }
   s.source_files  = "DVBluetooth/**/*.{h,m}"
   s.exclude_files = "DVBluetoothExample"
   # s.public_header_files = "Classes/**/*.h"
