@@ -26,7 +26,7 @@
         self.peripheral.delegate =  self;
 
         _reconnectTimes = 0;
-        _RSSI = [NSNumber numberWithInt:-255];
+        _RSSI = [NSNumber numberWithInt:0];
         _mServices = [[NSMutableDictionary alloc] init];
         _mCharacteristics = [[NSMutableDictionary alloc] init];
     }

@@ -14,7 +14,8 @@ NS_ASSUME_NONNULL_BEGIN
 typedef BOOL(^ScannedPeripheralsFilterBlock)(DVBlePeripheral *peripheral);
 typedef BOOL(^ConnectedPeripheralsFilterBlock)(DVBlePeripheral *peripheral);
 typedef void(^NotifyCharacteristicValueBlock)(DVBlePeripheral *peripheral);
-
+typedef void(^WriteDataCallbackBlock)(DVBlePeripheral *peripheral, DVBlePeripheralWriteState state, NSString *uuidStr);
+typedef void(^ReadDataCallbackBlock)(DVBlePeripheral *peripheral, DVBlePeripheralReadState state, NSString *uuidStr, NSData *data);
 @interface DVBleManager : NSObject
 
 #pragma mark - 属性
@@ -51,13 +52,21 @@ typedef void(^NotifyCharacteristicValueBlock)(DVBlePeripheral *peripheral);
 ///需要搜索所有的服务值和特征值,默认是YES
 @property (nonatomic, assign) BOOL needDiscoverAllServicesAndCharacteristics;
 
+///读取超时时间, 默认是10s
+@property (nonatomic, assign) NSTimeInterval readDataTimeoutInterval;
+///写入超时时间, 默认是10s
+@property (nonatomic, assign) NSTimeInterval writeDataTimeoutInterval;
+
 ///扫描到的设备过滤
 @property (nonatomic, copy) ScannedPeripheralsFilterBlock scannedPeriFilterBlock;
 ///连接到的设备过滤
 @property (nonatomic, copy) ConnectedPeripheralsFilterBlock connectPeriFilterBlock;
 ///监听特征值
 @property (nonatomic, copy) NotifyCharacteristicValueBlock notifyPeriCharacteristicBlock;
-
+//写入回调
+@property (nonatomic, copy) WriteDataCallbackBlock writeDataCallbackBlock;
+//读取回调
+@property (nonatomic, copy) ReadDataCallbackBlock readDataCallbackBlock;
 #pragma mark - 单例
 /**
  单例
@@ -163,6 +172,22 @@ typedef void(^NotifyCharacteristicValueBlock)(DVBlePeripheral *peripheral);
  */
 - (void)writeDataToPeripheral:(DVBlePeripheral *)peripheral onCharacteristicUUID:(NSString *)uuid withData:(NSData *)data;
 
+/**
+ 读取数据
+
+ @param peripheral 外设
+ @param uuid 外设特征值
+ */
+- (void)readDataFromPeripheral:(DVBlePeripheral *)peripheral onCharacteristicUUID:(NSString *)uuid;
+
+/**
+ 监听数据
+
+ @param peripheral 外设
+ @param uuid 特征值ID
+ @param enable 是否开启监听
+ */
+- (void)notifyValueToPeripheral:(DVBlePeripheral *)peripheral onCharacteristicUUID:(NSString *)uuid enable:(BOOL)enable;
 @end
 
 NS_ASSUME_NONNULL_END

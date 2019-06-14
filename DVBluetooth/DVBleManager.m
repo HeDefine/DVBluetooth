@@ -70,6 +70,9 @@
         _maxReconnectTimes = 3;
         _reconnectDuration = 10;
         
+        _writeDataTimeoutInterval = 10;
+        _readDataTimeoutInterval = 10;
+        
         _enableAutoReconnectLastPeripherals = YES;
         _needDiscoverAllServicesAndCharacteristics = YES;
         
@@ -131,9 +134,11 @@
     [NSThread cancelPreviousPerformRequestsWithTarget:self
                                              selector:@selector(stopScanPeripherals)
                                                object:nil];
-    [self performSelector:@selector(stopScanPeripherals)
-               withObject:nil
-               afterDelay:seconds > 0 ? seconds : 10];
+    if (seconds > 0) {
+        [self performSelector:@selector(stopScanPeripherals)
+                   withObject:nil
+                   afterDelay:seconds];
+    }
 }
 
 /**
@@ -242,11 +247,6 @@
     NSLog(@"外设(%@)......连接失败(原因:超时,可能设备已超出连接范围)",peri.name);
     //断开正在连接的设备
     [self.manager cancelPeripheralConnection:peri.peripheral];
-    //添加到重连列表中
-    if (![self.mReconnectPeripheralUUIDs containsObject:peri.identifier]) {
-        [peri reset];
-        [self.mReconnectPeripheralUUIDs addObject:peri.identifier];
-    }
     //进入回调
     if (self.delegate && [self.delegate respondsToSelector:@selector(didConnectFailedToPeripheral:error:)]) {
         [self.delegate didConnectFailedToPeripheral:peri error:DVBleManagerConnectErrorTimeout];
@@ -394,7 +394,49 @@
  写入数据
  */
 - (void)writeDataToPeripheral:(DVBlePeripheral *)peripheral onCharacteristicUUID:(NSString *)uuid withData:(NSData *)data {
-    if (peripheral.state != DVBlePeripheralStateConnected) {
+    //先判断当前蓝牙是否可用，不可用的话，会进入不可用回调
+    if (self.state != DVBleManagerStatePowerOn) {
+        if (self.delegate && [self.delegate respondsToSelector:@selector(didBluetoothStateChanged:)]) {
+            [self.delegate didBluetoothStateChanged:self.state];
+        }
+        return;
+    }
+    //写入操作
+    [peripheral writeData:data
+    onCharacteristicsUUID:uuid
+          timeoutInterval:self.writeDataTimeoutInterval];
+}
+
+/**
+ 读取数据
+ */
+- (void)readDataFromPeripheral:(DVBlePeripheral *)peripheral onCharacteristicUUID:(NSString *)uuid {
+    //先判断当前蓝牙是否可用，不可用的话，会进入不可用回调
+    if (self.state != DVBleManagerStatePowerOn) {
+        if (self.delegate && [self.delegate respondsToSelector:@selector(didBluetoothStateChanged:)]) {
+            [self.delegate didBluetoothStateChanged:self.state];
+        }
+        return;
+    }
+    [peripheral readDataOnCharacteristicsUUID:uuid
+                              timeoutInterval:self.readDataTimeoutInterval];
+}
+
+/**
+ 监听数据
+ */
+- (void)notifyValueToPeripheral:(DVBlePeripheral *)peripheral onCharacteristicUUID:(NSString *)uuid enable:(BOOL)enable {
+    //先判断当前蓝牙是否可用，不可用的话，会进入不可用回调
+    if (self.state != DVBleManagerStatePowerOn) {
+        if (self.delegate && [self.delegate respondsToSelector:@selector(didBluetoothStateChanged:)]) {
+            [self.delegate didBluetoothStateChanged:self.state];
+        }
+        return;
+    }
+    if (enable) {
+        [peripheral startNotifyCharacteristicUUID:uuid];
+    } else {
+        [peripheral stopNotifyCharacteristicUUID:uuid];
     }
 }
 
@@ -470,10 +512,15 @@
                 [self stopScanPeripherals];
             }
         }
-    }
-    //回调扫描到的新设备
-    if (self.delegate && [self.delegate respondsToSelector:@selector(didScanPeripheralState:newPeripheral:)]) {
-        [self.delegate didScanPeripheralState:DVBleManagerScanning newPeripheral:peri];
+        //回调扫描到的新设备
+        if (self.delegate && [self.delegate respondsToSelector:@selector(didScanPeripheralState:newPeripheral:)]) {
+            [self.delegate didScanPeripheralState:DVBleManagerScanning newPeripheral:nil];
+        }
+    } else {
+        //回调扫描到的新设备
+        if (self.delegate && [self.delegate respondsToSelector:@selector(didScanPeripheralState:newPeripheral:)]) {
+            [self.delegate didScanPeripheralState:DVBleManagerScanning newPeripheral:peri];
+        }
     }
 }
 
@@ -482,12 +529,16 @@
     if (!peri) {
         peri = [[DVBlePeripheral alloc] initWithPeripheral:peripheral];
     }
-    [peri setDelegate:self];
 
     //连接成功后,会把该设备从重连设备中移除.
     [self.mReconnectPeripheralUUIDs removeObject:peri.identifier];
+    //如果没有重连的设备，立刻进入取消重连的步骤，而不是等一段时间后再去判断
+    if (self.mReconnectPeripheralUUIDs.count == 0) {
+        [self cancelReconnect];
+    }
     //重置信号量, 清空服务值, 重置重连次数
     [peri reset];
+    [peri setDelegate:self];
 
     NSLog(@"外设(%@)......建立临时连接",peri.name);
     if (self.needDiscoverAllServicesAndCharacteristics) {
@@ -505,10 +556,11 @@
             [self.mConnectPeripheralUUIDs addObject:peri.identifier];
             self.mLastConnectedPeripheralUUIDs = self.mConnectPeripheralUUIDs.mutableCopy;
         }
-        //如果没有重连的设备，立刻进入取消重连的步骤，而不是等一段时间后再去判断
-        if (self.mReconnectPeripheralUUIDs.count == 0) {
-            [self cancelReconnect];
+        //监听值
+        if (self.notifyPeriCharacteristicBlock) {
+            self.notifyPeriCharacteristicBlock(peri);
         }
+
         //回调已连接
         if (self.delegate && [self.delegate respondsToSelector:@selector(didConnectToPeripheral:state:)]) {
             [self.delegate didConnectToPeripheral:peri state:DVBleManagerConnectSuccess];
@@ -601,10 +653,6 @@
             [self.delegate didConnectFailedToPeripheral:peripheral error:DVBleManagerConnectErrorNotParied];
         }
     }
-    //监听值
-    if (self.notifyPeriCharacteristicBlock) {
-        self.notifyPeriCharacteristicBlock(peripheral);
-    }
     //筛选服务和特征值
     if (self.connectPeriFilterBlock) {
         //如果有设置筛选条件的话
@@ -621,10 +669,11 @@
                 [self.mConnectPeripheralUUIDs addObject:peripheral.identifier];
                 self.mLastConnectedPeripheralUUIDs = self.mConnectPeripheralUUIDs.mutableCopy;
             }
-            //如果没有重连的设备，立刻进入取消重连的步骤，而不是等一段时间后再去判断
-            if (self.mReconnectPeripheralUUIDs.count == 0) {
-                [self cancelReconnect];
+            //监听值
+            if (self.notifyPeriCharacteristicBlock) {
+                self.notifyPeriCharacteristicBlock(peripheral);
             }
+
             //回调已连接
             if (self.delegate && [self.delegate respondsToSelector:@selector(didConnectToPeripheral:state:)]) {
                 [self.delegate didConnectToPeripheral:peripheral state:DVBleManagerConnectSuccess];
@@ -642,14 +691,14 @@
     } else {
         //如果没有设置筛选条件
         NSLog(@"外设(%@)......正式连接",peripheral.name);
+        //监听值
+        if (self.notifyPeriCharacteristicBlock) {
+            self.notifyPeriCharacteristicBlock(peripheral);
+        }
         //添加到已连接的设备
         if (![self.mConnectPeripheralUUIDs containsObject:peripheral.identifier]) {
             [self.mConnectPeripheralUUIDs addObject:peripheral.identifier];
             self.mLastConnectedPeripheralUUIDs = self.mConnectPeripheralUUIDs.mutableCopy;
-        }
-        //如果没有重连的设备，立刻进入取消重连的步骤，而不是等一段时间后再去判断
-        if (self.mReconnectPeripheralUUIDs.count == 0) {
-            [self cancelReconnect];
         }
         //回调已连接
         if (self.delegate && [self.delegate respondsToSelector:@selector(didConnectToPeripheral:state:)]) {
@@ -674,6 +723,7 @@
     } else {
         NSLog(@"外设(%@)......发送数据失败",peripheral.name);
     }
+    self.writeDataCallbackBlock(peripheral, result, characteristicUUID);
 }
 
 
@@ -695,6 +745,7 @@
     } else {
         NSLog(@"外设(%@)......读取数据失败",peripheral.name);
     }
+    self.readDataCallbackBlock(peripheral, result, characteristicUUID, data);
 }
 
 #pragma mark - Setter && Getter
@@ -766,5 +817,13 @@
 
 - (void)setNotifyPeriCharacteristicBlock:(NotifyCharacteristicValueBlock)notifyPeriCharacteristicBlock {
     _notifyPeriCharacteristicBlock = notifyPeriCharacteristicBlock;
+}
+
+- (void)setWriteDataCallbackBlock:(WriteDataCallbackBlock)writeDataCallbackBlock {
+    _writeDataCallbackBlock = writeDataCallbackBlock;
+}
+
+- (void)setReadDataCallbackBlock:(ReadDataCallbackBlock)readDataCallbackBlock {
+    _readDataCallbackBlock = readDataCallbackBlock;
 }
 @end
