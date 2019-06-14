@@ -14,7 +14,7 @@
 1. 安装Cocoapod, 并在根目录下运行 `pod init`
 2. 在`Podfile`文件中输入
 ```
-pod 'DVBluetooth','~> 0.2.0'
+pod 'DVBluetooth','~> 0.3.0'
 ```
 3. 命令行运行`pod update`
 
